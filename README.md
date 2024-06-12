@@ -1,7 +1,7 @@
 Note
 ----
 
-This is a development branch.
+This is an internal working development repo.
 For final release of atlas code, please see
 https://github.com/lbnl-science-it/atlas-release
 
