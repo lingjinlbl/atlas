@@ -12,10 +12,11 @@ vehicles_thisyear <- dipose_clean(vehicles_thisyear, initialyear, yreffect)
 toc()
 print('predicting vehicle level transaction outcome')
 tic()
-tmp <- dispose_apply(vehicles_thisyear) # vehicle level transaction decisions
+tmp <- dispose_apply(vehicles_thisyear)
 toc()
 print(table(tmp$nextwave_status)/nrow(tmp))
 
+#tmp.sav = tmp; 
 # dispose      keep   replace 
 # 0.1953017 0.6081376 0.1965607 
 
@@ -36,14 +37,10 @@ print('predicting household level transaction outcomes')
 tic()
 households_thisyear <- addition_clean(vehicles_thisyear, households_thisyear)
 
-tmp2 <- addition(households_thisyear) # household transaction decisions
+tmp2 <- addition(households_thisyear)
 toc()
 
 print(table(tmp2$addition)/nrow(tmp2))
-
-tmp2.sav = tmp2 # hh decision
-tmp.sav = tmp # veh level decision
-
 # LJ comment: no addition means no change in the level of vehicles
 # addition 1  addition 2  decrease 1  decrease 2 no addition 
 # 0.119505420 0.009272607 0.221495383 0.037608140 0.612118450 
@@ -65,74 +62,37 @@ print('adjust vehicle level disposal decision by hh level vehicle ')
 tic()
 hh3 <- nrow(tmp2[ncar_thiswave==3 & (addition=="decrease 2" | addition=="decrease 1")])
 hh4 <- nrow(tmp2[ncar_thiswave>=4 & (addition=="decrease 2" | addition=="decrease 1")])
-
-# random sample the difference from the hh with dispose decision
-
 veh3 <- unique(tmp[ncar_thiswave==3&nextwave_status=="dispose"], by="headpid")[,c("headpid")]
 veh4 <- unique(tmp[ncar_thiswave>=4&nextwave_status=="dispose"], by="headpid")[,c("headpid")]
 
-print(paste('N veh disp 3v hh', nrow(veh3)))
-print(paste('N hh disp 3v hh', hh3))
-
-print(paste('N veh disp 4v hh', nrow(veh4)))
-print(paste('N hh disp 4v hh', hh4))
-
-#if (nrow(veh3)>=hh3){
-#  veh3 <- veh3[sample(.N,max(0, nrow(veh3)-hh3))] # LJ 4/24/2024, to be safe, change from original veh3 <- veh3[sample(.N,max(0, nrow(veh3)-hh3))]
-#}
-#if (nrow(veh4)>=hh4){
-#  veh4 <- veh4[sample(.N,max(0, nrow(veh4)-hh4))]  
-#}
-# to be safe:
-  veh3 <- veh3[sample(.N,max(0, nrow(veh3)-hh3))]
-
-  veh4 <- veh4[sample(.N,max(0, nrow(veh4)-hh4))]  
-
+if (nrow(veh3)>=hh3){
+  veh3 <- veh3[sample(.N,nrow(veh3)-hh3)]
+}
+if (nrow(veh4)>=hh4){
+  veh4 <- veh4[sample(.N,nrow(veh4)-hh4)]  
+}
 
 # change the status back to keep
-# Qianmiao's old code
-# tmp <- (tmp %>% merge(rbind(veh3, veh4)[,m:=1], by="headpid", all.x = T))[m==1, nextwave_status:="keep"][,-c("m")]
-# tmp <- merge(tmp[,-c("Ndisp_veh")], tmp[nextwave_status=="dispose"][, .(Ndisp_veh=.N), by="headpid"][,c("headpid", "Ndisp_veh")],
-#              by="headpid", all.x=T)[is.na(Ndisp_veh)==T, Ndisp_veh:=0]
-# 
+tmp <- (tmp %>% merge(rbind(veh3, veh4)[,m:=1], by="headpid", all.x = T))[m==1, nextwave_status:="keep"][,-c("m")]
+tmp <- merge(tmp[,-c("Ndisp_veh")], tmp[nextwave_status=="dispose"][, .(Ndisp_veh=.N), by="headpid"][,c("headpid", "Ndisp_veh")], 
+             by="headpid", all.x=T)[is.na(Ndisp_veh)==T, Ndisp_veh:=0]
 
+# second adjustmetn the overprediction of vehicle level disposal decision
+disp_adjust <- merge(tmp2[, .(headpid, Ndisp_hh, nvehicles)], unique(tmp, by = c("headpid", "Ndisp_veh")), by="headpid")[
+  Ndisp_veh>Ndisp_hh & Ndisp_hh!=0 & nvehicles>=3][,gap:=Ndisp_veh-Ndisp_hh][,.(headpid, gap)]
 
-# LJ 4/24/2024 rewrote above, 
-#change the Ndisp_veh = 0, and change the disposed vehcile status back to "keep", do not change other "keep" or "replace" vechile status in the same hh
-# 
-tmp <- tmp[headpid %in% c(veh3$headpid, veh4$headpid), Ndisp_veh := 0][headpid %in% c(veh3$headpid, veh4$headpid) & nextwave_status=="dispose", nextwave_status := "keep"]
- 
+tmp <- merge(tmp, disp_adjust, by="headpid", all.x = T)
+tmp <- tmp[is.na(gap), gap:=0]
 
-print(table(tmp$nextwave_status)/nrow(tmp))
-table(tmp$nextwave_status)
+# only adjust for households having 3 or 4+ vehicles
+tmp0 <- tmp[gap>0 & nextwave_status=="dispose" & ncar_thiswave>=3] %>% 
+  group_split(headpid) %>%
+  map2_df(disp_adjust$gap, ~sample_n(.x, size = .y)) %>%
+  rbind(tmp[gap==0 | nextwave_status!="dispose" | ncar_thiswave<3])
 
-# second adjustmetn the overprediction of vehicle level disposal decision only for disposal >=3
-kk <- merge(tmp2[, .(headpid, Ndisp_hh, nvehicles)], unique(tmp, by = c("headpid", "Ndisp_veh")), by="headpid")[
-   nvehicles>=4, .(headpid, gap = Ndisp_veh - Ndisp_hh, Ndisp_veh)]
-
-mm <- merge(tmp2[, .(headpid, Ndisp_hh, nvehicles)], unique(tmp, by = c("headpid", "Ndisp_veh")), by="headpid")[
-  nvehicles==3, .(headpid, gap = Ndisp_veh - Ndisp_hh, Ndisp_veh)]
-
-Nveh.adj4 = sum(kk$gap)
-Nveh.adj3 = sum(mm$gap)
-
-if(Nveh.adj4>0){ # if nonzero gap
-  tmp0 <- tmp[headpid %in% kk$headpid & nextwave_status == 'dispose'][sample(.N, min(Nveh.adj4, sum(kk$Ndisp_veh))), nextwave_status := 'keep']
-  tmp = rbind(tmp[!(headpid %in% kk$headpid) | nextwave_status != 'dispose'], tmp0)
-  rm(tmp0)
-}
-if(Nveh.adj3>0){
-  tmp0 <- tmp[headpid %in% mm$headpid & nextwave_status == 'dispose'][sample(.N, min(Nveh.adj3, sum(mm$Ndisp_veh))), nextwave_status := 'keep']
-  tmp = rbind(tmp[!(headpid %in% mm$headpid) | nextwave_status != 'dispose'], tmp0)
-  
-}
-
+tmp <- as.data.table(setdiff(tmp, tmp0))[,nextwave_status:="keep"] %>% rbind(tmp0)
 toc()
 print(table(tmp$nextwave_status)/nrow(tmp))
-
-# year2019
-#dispose      keep   replace 
-# 0.1263762 0.6579751 0.2156487 
 
 # dispose      keep   replace 
 # 0.1515261 0.6567116 0.1917623
@@ -148,11 +108,10 @@ print(table(tmp$nextwave_status)/nrow(tmp))
 # dispose       keep    replace 
 # 0.08203513 0.70249776 0.21546711 
 
-veh_trans_decision = tmp
-hh_trans_decision = tmp2
-
 if(midout){
   print('save the transaction outcomes to rdatdir')
+  veh_trans_decision = tmp
+  hh_trans_decision = tmp2
 
 tic()
 save(veh_trans_decision,hh_trans_decision, vehicles_thisyear, file = file.path(rdatdir,paste0('transact.outcome.',baseyear,'-',evoyear,'.RData')))
@@ -370,10 +329,6 @@ vehmodepredict$maindriver_id = NA
 #============= step 9: clean the vehicle data and household data for next wave
 print('combining replacement and addition vehicle choices with kept/continuing vehicles to create vehicle outputs for continuing hh in next wave')
 source(paste0(v2codedir,'/9output_data.R'))
-
-# LJ 4/24/2024 print out the veh ownership distribution from the continuing households
-print('predicted num hh by num veh owned in continuing hh in the output year ')
-print(round(prop.table(table(households_nextyear$nvehicles)),2))
 
 #============= step 10: match new hh to the hh with known veh prediction in the evolution year
 print('match the new hh with existing hh')
