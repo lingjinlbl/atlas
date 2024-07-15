@@ -81,9 +81,12 @@ COPY Dockerfile* /opt/gitrepo/container_layer2/
 COPY . /
 COPY . /opt/gitrepo/atlas/
 
-ENV DBG_ATLAS_CODE_VER "Atlas sfb-v2.0.8 -- Docker.atlas 2023.0328 adopt scen"
+#ENV DBG_ATLAS_CODE_VER "Atlas sfb-v2.0.4 -- Docker.atlas 2023.0130 d11 r404 w/fastDummies via sfb-v2-ling"
+ENV DBG_ATLAS_CODE_VER "Atlas sfb-v2.0.13 -- Docker.atlas 2024.0715"
 ENV DBG_DOCKERFILE Dockerfile.atlas
 ENV TZ America/Los_Angeles 
+ENV PYTHONUNBUFFERED 1
+# actually need to set PYTHONUNBUFFERED  before calling run_atlas.py
 
 RUN  cd / \
   && touch _TOP_DIR_OF_CONTAINER_  \
