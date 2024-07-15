@@ -27,10 +27,10 @@ match_family2 <- function(from_tract, new_hhids,cur_hhids, hhmatch_varnames,demo
   varnames = hhmatch_varnames
   demodat <- as.data.frame(demodat) # demodat is a data.table object, to avoid run error, force it to data.frame here.
   fromdat = demodat%>%  # new hh
-    # dplyr::select(matches(c('headpid','tract_geoid',varnames))) %>%
+    dplyr::select(matches(c('headpid','tract_geoid',varnames))) %>%
     dplyr::filter(headpid %in% new_hhids, tract_geoid == from_tract)
   
-  fromvec = t(as.matrix(fromdat[,c(-1,-2)]))
+  fromvec = t(as.matrix(fromdat[,varnames]))
   
   tmpnewids = unique(fromdat$headpid)
   
@@ -50,7 +50,10 @@ match_family2 <- function(from_tract, new_hhids,cur_hhids, hhmatch_varnames,demo
     # if tract id has some error
     # first try using 2000 hh from othe same county
     todat <- demodat%>% 
-      dplyr::filter(headpid %in% cur_hhids, county_id == floor(from_tract/1000000))
+      dplyr::filter(headpid %in% cur_hhids, county_id == floor(from_tract/1000000))%>%
+      dplyr::select(matches(c('headpid','tract_geoid',varnames)))
+      
+      
     if(dim(todat)[1]<1000){ # if very few hh in the county, use random select sample from full pop to match
       # use randomm selected hh for matching
       todat <- demodat%>% 
@@ -71,7 +74,7 @@ match_family2 <- function(from_tract, new_hhids,cur_hhids, hhmatch_varnames,demo
   # LJ 10/2022: shuffle the existing hh so that the pick of first min hh is random, this increase the speed and stability
   todat = todat[sample(1:nrow(todat)),]
   
-  tovec = t(as.matrix(todat[,c(-1,-2)]))
+  tovec = t(as.matrix(todat[,varnames]))
   
   toids = todat$headpid
   
@@ -320,7 +323,7 @@ matchinghhid_parallel <- function(demodat, Npe){
                  .packages = c('dplyr','tidyr')
   )  %dopar% {
     # for(i in 1:length(from_tracts)){
-      print(paste('Loop',i, 'out of',length(from_tracts)))
+    #  print(paste('Loop',i, 'out of',length(from_tracts)))
 
     match_family2(from_tract = from_tracts[i], new_hhids=new_hhids, 
                  cur_hhids=cur_hhids, 

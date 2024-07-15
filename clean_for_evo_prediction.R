@@ -25,13 +25,17 @@ blocks0 <- fread(file.path(inputdir, paste0('year',baseyear),"blocks.csv"))
 persons0 <- fread(file.path(inputdir, paste0('year',baseyear),"persons.csv")) 
 names(persons0)[1] <- "person_id"
 
+
+
 # demos data for evolution year
 households1 <- fread(file.path(inputdir, paste0('year',evoyear),"households.csv"))
 grave1 <- fread(file.path(inputdir, paste0('year',evoyear),"grave.csv"))
 persons1 <- fread(file.path(inputdir, paste0('year',evoyear),"persons.csv"))
 names(persons1)[1] <- "person_id"
 
-
+# LJ 4/28/2024 coerce edu type to integer to accommondate the tutorial data and full data
+persons1$edu = as.integer(persons1$edu)
+persons0$edu = as.integer(persons0$edu)
 
 # Accessbility data
 if(beamac>0){ # if read from beam, read the accessibility computed from beam by preprocess.py, which was saved in the inputdir/yearXXXX
