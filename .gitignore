@@ -3,7 +3,7 @@
 .Rapp.history
 
 # Session Data files
-.RData
+## .RData   ## some .RData specifically commited to repo as needed to run the code
 
 # User-specific files
 .Ruserdata
